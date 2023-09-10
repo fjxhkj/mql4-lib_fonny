@@ -103,7 +103,7 @@ public:
 
    //--- for adding values to the container, implement your own methods
    //--- the following 2 methods will help the implementation
-   int               append()
+  int appendBase()
      {
       int ni=ArraySize(m_removed);
       ArrayResize(m_removed,ni+1,m_buffer);
@@ -113,7 +113,7 @@ public:
       return ni;
      }
 
-   void              unremove(int i)
+  void unremoveBase(int i)
      {
       m_removed[i]=false;
       m_realSize++;

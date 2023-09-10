@@ -400,14 +400,18 @@ BOOL MqlSendAppMessage(HWND hwnd, WORD event, DWORD param)
 1. `Collection/LinkedList` 是链表的实现。
 2. `Collection/Vector` 是基于数组的实现。
 
-还有两种 `Set` 实现：
+> Vector (ArrayList) 适合查找，LinkedList 适合增删.
+>
+> 对于简单且长度较短的集合，即使进行频繁的插入和删除操作，基于数组的实现可能更快且开销较小。
+
+另外还有两种 `Set` 实现:
 
 1. 基于数组的 `Collection/ArraySet`
 2. 基于哈希的 `Collection/HashSet`
 
-借助类模板和继承，我实现了一个层次结构：
+借助类模板和继承，我实现了一个层次结构:
 
-    ConstIterable -> Iterable -> Collection -> List -> Vector(like ArrayList in Java)
+    ConstIterable -> Iterable -> Collection -> List -> Vector (like ArrayList in Java)
                                                     -> LinkedList
                                             -> Set  -> ArraySet
                                                     -> HashSet
@@ -415,8 +419,6 @@ BOOL MqlSendAppMessage(HWND hwnd, WORD event, DWORD param)
 `List` 添加了一些重要的方法，例如通过索引访问元素，以及类似于 `stack` 和 `queue` 的方法（如 `push`、`pop`、`shift`、`unshift` 等）。
 
 `Set` 基本上与 `Collection` 相同，只是增加了一些集合操作（如并集、交集等）。
-
-对于简单且长度较短的集合，即使进行频繁的插入和删除操作，基于数组的实现可能更快且开销较小。
 
 我想指出一些非常有用但未记录在案的 MQL4/5 特性：
 
@@ -447,56 +449,94 @@ Vector<int> intVector;
 
 还有两个用于迭代的宏：`foreach` 和 `foreachv`。在循环中可以使用 `break` 和 `return`，而不必担心资源泄漏，因为我们使用 `Iter` RAII 类来包装迭代器指针。
 
-Here is a simple example:
+以下为用 `LinkedList` 管理历史订单记录的例子:
 
-```
+```c++
 //+------------------------------------------------------------------+
 //|                                                TestOrderPool.mq4 |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2016-2017, Li Ding"
-#property link      "dingmaotu@hotmail.com"
-#property version   "1.00"
+#property link "dingmaotu@hotmail.com"
+#property version "1.00"
 #property strict
 
 #include <Mql/Trade/Order.mqh>
 #include <Mql/Trade/OrderPool.mqh>
 #include <Mql/Collection/LinkedList.mqh>
 
-// for simplicity, I will not use the Lang/Script class
+class ProfitHisOrderPool : public HistoryPool
+{
+private:
+public:
+  ProfitHisOrderPool(){};
+  ~ProfitHisOrderPool(){};
+  bool matches() const { return Order::Profit() > 0; }
+};
+
+// 更多用法请参考源码以及 mt4-lib 项目的 readme_cn.md
+
 void OnStart()
+{
+  LinkedList<Order *> list;
+  ProfitHisOrderPool pool;
+  if (pool.count() < 1)
   {
-   LinkedList<Order*> list;
-   TradingPool pool;
-   foreachorder(pool)
-     {
-         OrderPrint(); // to compare with Order.toString
-         list.push(new Order());
-     }
-
-   PrintFormat("There are %d orders. ",list.size());
-
-   //--- Iter RAII class
-   for(Iter<Order*> it(list); !it.end(); it.next())
-     {
-      Order*o=it.current();
-      Print(o.toString());
-     }
-
-   //--- foreach macro: use it as the iterator variable
-   foreach(Order*,list)
-     {
-      Order*o=it.current();
-      Print(o.toString());
-     }
-
-   //--- foreachv macro: declare element varaible o in the second parameter
-   foreachv(Order*,o,list)
-     Print(o.toString());
+    PrintFormat("*** %s, 无任何历史订单!", __FUNCTION__);
+    return;
   }
-//+------------------------------------------------------------------+
+
+  PrintFormat("*** %s, 列出历史订单池共 %i 条记录.", __FUNCTION__, pool.count());
+
+  foreachorder(pool)
+  {
+    // 用于对比 Order.toString()
+    OrderPrint();
+    list.push(new Order());
+  }
+
+  PrintFormat("*** %s, 已加入到 list 中的元素数量: %d", __FUNCTION__, list.size());
+
+  Order *o = list.get(0);
+  PrintFormat("*** %s, get(0) 到的元素 oTicket: %i", __FUNCTION__, o.getTicket());
+
+  // 删除元素,如果已知序号,也可以用 list.removeAt(0)
+  Order *o2 = list.shift();
+  PrintFormat("*** %s, shift 到被删除的元素 oTicket: %i", __FUNCTION__, o2.getTicket());
+
+  PrintFormat("*** %s, 删除首个元素成功,现在 list 中的元素的数量: %d", __FUNCTION__, list.size());
+
+  // 查看列表的头部元素
+  list.push(o);
+  PrintFormat("*** %s, 将 get(0) 得到的元素再加回去list中, 现在集合中的数量: %d", __FUNCTION__, list.size());
+
+  // 以下为各种遍历list的方法
+
+  // // Iter RAII class
+  // for (Iter<Order *> it(list); !it.end(); it.next())
+  // {
+  //   Order *o = it.current();
+  //   Print(o.toString());
+  // }
+
+  // // foreach macro: use it as the iterator variable
+  // foreach (Order *, list)
+  // {
+  //   Order *o = it.current();
+  //   Print(o.toString());
+  // }
+
+  // foreachv macro: declare element varaible o in the second parameter
+  foreachv(Order *, oInfo, list)
+  {
+    Print(oInfo.toString());
+  }
+
+  PrintFormat("*** %s, 测试结束!", __FUNCTION__);
+}
+
 ```
 
-### 字典和映射
+### HashMap 字典和映射
 
 对于任何复杂的程序来说，映射（或字典）非常重要。Mql4-lib 使用 Murmur3 字符串哈希算法实现了一个高效的哈希映射。该实现遵循 CPython3 的哈希算法，并保持插入顺序。
 
@@ -504,7 +544,7 @@ void OnStart()
 
 `HashMap` 接口非常简单。以下是一个简单的示例，用于统计著名歌剧《哈姆雷特》中的单词数量：
 
-```MQL5
+```c++
 #include <Mql/Lang/Script.mqh>
 #include <Mql/Collection/HashMap.mqh>
 #include <Mql/Utils/File.mqh>
@@ -517,6 +557,7 @@ public:
     TextFile txt("hamlet.txt", FILE_READ);
     if (txt.valid())
     {
+      // 初始化 HashMap
       HashMap<string, int> wordCount;
       while (!txt.end() && !IsStopped())
       {
@@ -551,7 +592,7 @@ DECLARE_SCRIPT(CountHamletWords, false)
 
 在最近的更新（2017-11-28）之后，Map 迭代器不再是 const，并支持两个额外的操作：`remove` 和 `replace (setValue)`。因此，在之前的版本中，如果要从映射中移除某些元素，您必须将键存储在其他位置，并稍后删除这些键。这既不优雅也不高效。以下示例展示了这种差异：
 
-```MQL5
+```c++
 HashMap<int, int> m;
 
 //--- 更新之前
@@ -582,7 +623,7 @@ MQL 文件函数的设计直接操作三种类型的文件：二进制文件、�
 
 这里是一个关于 TextFile 和 CsvFile 的示例：
 
-```MQL5
+```c++
 #include <Mql/Utils/File.mqh>
 
 void OnStart()
@@ -629,7 +670,7 @@ void OnStart()
 
 然后看看如何使用 `FileIterator`:
 
-```MQL5
+```c++
 #include <Mql/Utils/File.mqh>
 
 int OnStart()
