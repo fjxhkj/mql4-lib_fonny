@@ -46,14 +46,14 @@ public:
 
    int               append(Key key)
      {
-      int ni=append();
+    int ni = appendBase();
       m_keys[ni]=key;
       return ni;
      }
 
    void              unremove(int i,Key key)
      {
-      unremove(i);
+    unremoveBase(i);
       m_keys[i]=key;
      }
   };

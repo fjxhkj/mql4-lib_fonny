@@ -63,7 +63,7 @@ public:
 
    int               append(Key key,Value value)
      {
-      int ni=append();
+    int ni = appendBase();
       m_keys[ni]=key;
       m_values[ni]=value;
       return ni;
@@ -71,7 +71,7 @@ public:
 
    void              unremove(int i,Key key,Value value)
      {
-      unremove(i);
+    unremoveBase(i);
       m_keys[i]=key;
       m_values[i]=value;
      }
